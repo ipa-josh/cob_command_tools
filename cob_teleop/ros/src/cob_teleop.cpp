@@ -70,6 +70,7 @@
 #include <sensor_msgs/JointState.h>
 #include <trajectory_msgs/JointTrajectory.h>
 #include <geometry_msgs/Twist.h>
+#include <std_msgs/ColorRGBA.h>
 
 #include <cob_srvs/Trigger.h>
 #include <brics_actuator/JointPositions.h>
@@ -115,6 +116,7 @@ public:
 	int arm_joint34_button_;
 	int arm_joint56_button_;
 	int arm_joint7_button_;
+	int led_buttons_[3];
 	//signs
 	int up_down_, left_right_;   //sign for movements of upper_neck and tray
 
@@ -122,11 +124,13 @@ public:
 	int deadman_button_, run_button_, base_safety_button_, stop_base_button_, recover_base_button_;
 	bool joy_active_, stopped_, base_safety_;
 	double run_factor_, run_factor_param_;
+	double led_value_[3], led_step_[3];
 
 
 	ros::NodeHandle n_;
 	ros::Subscriber joy_sub_;  //subscribe topic joy
 	ros::Subscriber joint_states_sub_;  //subscribe topic joint_states
+	ros::Publisher led_pub_;
 
 	bool got_init_values_;
 	double time_for_init_;
@@ -147,6 +151,7 @@ public:
 	void update();
 	void update_joint_modules();
 	void update_base();
+	void update_leds();
 	void setInitValues();
 	~TeleopCOB();
 
@@ -379,6 +384,13 @@ void TeleopCOB::init()
 	n_.param("stop_base_button",stop_base_button_,8);
 	n_.param("recover_base_button",recover_base_button_,9);
 
+	n_.param("led_r_button",led_buttons_[0],-1);
+	n_.param("led_g_button",led_buttons_[0],-1);
+	n_.param("led_b_button",led_buttons_[0],-1);
+
+	n_.param("led_step",led_step_[0],0.1);
+	led_step_[1]=led_step_[2]=led_step_[0];
+
 	// assign axis
 	n_.param("axis_vx",axis_vx_,1);
 	n_.param("axis_vy",axis_vy_,0);
@@ -408,6 +420,7 @@ void TeleopCOB::init()
 	// TODO general!!!
 	joy_sub_ = n_.subscribe("/joy",1,&TeleopCOB::joy_cb,this);
 	joint_states_sub_ = n_.subscribe("/joint_states",1,&TeleopCOB::joint_states_cb,this);
+	led_pub_ = n_.advertise<std_msgs::ColorRGBA>(("/light_controller/command"),1);
 }
 
 /*!
@@ -502,6 +515,20 @@ void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 	else //button release
 	{
 		run_factor_ = 1.0;
+	}
+
+	// leds button
+	for(size_t i=0; i<3; i++) {
+		if(led_buttons_[i]>=0 && led_buttons_[i]<(int)joy_msg->buttons.size() && joy_msg->buttons[led_buttons_[i]]==1)
+		{
+			if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]>0.0)
+				led_value_[i] += led_step_[i]*run_factor_;
+			else if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]<0.0)
+				led_value_[i] -= led_step_[i]*run_factor_;
+
+			if(led_value_[i]>1) led_value_[i]=1;
+			else if(led_value_[i]<0) led_value_[i]=0;
+		}
 	}
 	
 	// base safety button
@@ -835,6 +862,7 @@ void TeleopCOB::update()
 
 			update_joint_modules();
 			update_base();
+			update_leds();
 			stopped_ = true;
 			ROS_INFO("stopped all components");
 		}
@@ -898,6 +926,18 @@ void TeleopCOB::update_joint_modules()
 		jointModule->module_publisher_.publish(traj); // TODO, change
 		jointModule->module_publisher_brics_.publish(cmd_vel);
 	}
+}
+
+void TeleopCOB::update_leds()
+{
+	if( led_buttons_[0]==-1 && led_buttons_[1]==-1 && led_buttons_[2]==-1 ) return;
+	std_msgs::ColorRGBA color;
+	color.a = 1.;
+	color.r = led_value_[0];
+	color.g = led_value_[1];
+	color.b = led_value_[2];
+
+	led_pub_.publish(color);
 }
 
 /*!
