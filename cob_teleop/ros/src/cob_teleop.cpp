@@ -385,11 +385,13 @@ void TeleopCOB::init()
 	n_.param("recover_base_button",recover_base_button_,9);
 
 	n_.param("led_r_button",led_buttons_[0],-1);
-	n_.param("led_g_button",led_buttons_[0],-1);
-	n_.param("led_b_button",led_buttons_[0],-1);
+	n_.param("led_g_button",led_buttons_[1],-1);
+	n_.param("led_b_button",led_buttons_[2],-1);
 
 	n_.param("led_step",led_step_[0],0.1);
 	led_step_[1]=led_step_[2]=led_step_[0];
+
+	led_value_[0]=led_value_[1]=led_value_[2]=0;
 
 	// assign axis
 	n_.param("axis_vx",axis_vx_,1);
@@ -530,6 +532,7 @@ void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 			else if(led_value_[i]<0) led_value_[i]=0;
 		}
 	}
+	ROS_DEBUG("led values %f %f %f", led_value_[0], led_value_[1], led_value_[2]);
 	
 	// base safety button
 	if(base_safety_button_>=0 && base_safety_button_<(int)joy_msg->buttons.size() && joy_msg->buttons[base_safety_button_]==1)
@@ -887,6 +890,7 @@ void TeleopCOB::update()
 
 	update_joint_modules();
 	update_base();
+	update_leds();
 	stopped_ = false;
 }
 
