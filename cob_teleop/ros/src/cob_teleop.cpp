@@ -111,6 +111,7 @@ public:
 
 	int lower_neck_button_,upper_neck_button_; //buttons
 	int tray_button_;
+	int special_button_;
 	int axis_vx_,axis_vy_,axis_vth_;
 	int arm_joint12_button_;
 	int arm_joint34_button_;
@@ -374,6 +375,7 @@ void TeleopCOB::init()
 	n_.param("lower_neck_button",lower_neck_button_,6);
 	n_.param("upper_neck_button",upper_neck_button_,4);
 	n_.param("tray_button",tray_button_,3);
+	n_.param("special_button",special_button_,-1);
 	n_.param("arm_joint12_button",arm_joint12_button_,0);
 	n_.param("arm_joint34_button",arm_joint34_button_,1);
 	n_.param("arm_joint56_button",arm_joint56_button_,2);
@@ -490,6 +492,26 @@ void TeleopCOB::joint_states_cb(const sensor_msgs::JointState::ConstPtr &joint_s
  */
 void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 {
+
+	//special button section (not critical!!!!)
+	if( special_button_>=0 && special_button_<(int)joy_msg->buttons.size() && joy_msg->buttons[special_button_]==1 ) {
+
+		// leds button
+		for(size_t i=0; i<3; i++) {
+			if(led_buttons_[i]>=0 && led_buttons_[i]<(int)joy_msg->buttons.size() && joy_msg->buttons[led_buttons_[i]]==1)
+			{
+				if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]>0.0)
+					led_value_[i] += led_step_[i]*run_factor_;
+				else if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]<0.0)
+					led_value_[i] -= led_step_[i]*run_factor_;
+
+				if(led_value_[i]>1) led_value_[i]=1;
+				else if(led_value_[i]<0) led_value_[i]=0;
+			}
+		}
+
+	}
+
 	// deadman button to activate joystick
 	if(deadman_button_>=0 && deadman_button_<(int)joy_msg->buttons.size() && joy_msg->buttons[deadman_button_]==1)
 	{
@@ -515,20 +537,6 @@ void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 	else //button release
 	{
 		run_factor_ = 1.0;
-	}
-
-	// leds button
-	for(size_t i=0; i<3; i++) {
-		if(led_buttons_[i]>=0 && led_buttons_[i]<(int)joy_msg->buttons.size() && joy_msg->buttons[led_buttons_[i]]==1)
-		{
-			if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]>0.0)
-				led_value_[i] += led_step_[i]*run_factor_;
-			else if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]<0.0)
-				led_value_[i] -= led_step_[i]*run_factor_;
-
-			if(led_value_[i]>1) led_value_[i]=1;
-			else if(led_value_[i]<0) led_value_[i]=0;
-		}
 	}
 	
 	// base safety button
