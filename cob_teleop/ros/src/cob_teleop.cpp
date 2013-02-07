@@ -395,6 +395,7 @@ void TeleopCOB::init()
 	n_.param("led_r_button",led_buttons_[0],-1);
 	n_.param("led_g_button",led_buttons_[1],-1);
 	n_.param("led_b_button",led_buttons_[2],-1);
+<<<<<<< HEAD
 
 	for(int i=0; i<4; i++) {
 		char buffer[128];
@@ -404,9 +405,13 @@ void TeleopCOB::init()
 		if(!n_.getParam(buffer,scripts_[i]))
 			ROS_WARN((std::string(buffer)+" is not set, but button is used").c_str());
 	}
+=======
+>>>>>>> 37533008cd31d4c470476989217cee1a0600e367
 
 	n_.param("led_step",led_step_[0],0.1);
 	led_step_[1]=led_step_[2]=led_step_[0];
+
+	led_value_[0]=led_value_[1]=led_value_[2]=0;
 
 	// assign axis
 	n_.param("axis_vx",axis_vx_,1);
@@ -968,6 +973,7 @@ void TeleopCOB::update()
 
 	update_joint_modules();
 	update_base();
+	update_leds();
 	stopped_ = false;
 }
 
