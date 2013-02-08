@@ -111,12 +111,17 @@ public:
 
 	int lower_neck_button_,upper_neck_button_; //buttons
 	int tray_button_;
+	int special_button_;
+	int script_button_;
 	int axis_vx_,axis_vy_,axis_vth_;
 	int arm_joint12_button_;
 	int arm_joint34_button_;
 	int arm_joint56_button_;
 	int arm_joint7_button_;
 	int led_buttons_[3];
+	int script_buttons_[4];
+	std::string scripts_[4];
+	pid_t pid_;
 	//signs
 	int up_down_, left_right_;   //sign for movements of upper_neck and tray
 
@@ -336,6 +341,7 @@ bool TeleopCOB::assign_base_module(XmlRpc::XmlRpcValue mod_struct)
  */
 TeleopCOB::TeleopCOB()
 {
+	pid_ = -1;
 	getConfigurationFromParameters(); // assign configuration and subscribe to topics
 	got_init_values_ = false;
 	time_for_init_ = 0.0;
@@ -374,6 +380,8 @@ void TeleopCOB::init()
 	n_.param("lower_neck_button",lower_neck_button_,6);
 	n_.param("upper_neck_button",upper_neck_button_,4);
 	n_.param("tray_button",tray_button_,3);
+	n_.param("special_button",special_button_,-1);
+	n_.param("script_button",script_button_,-1);
 	n_.param("arm_joint12_button",arm_joint12_button_,0);
 	n_.param("arm_joint34_button",arm_joint34_button_,1);
 	n_.param("arm_joint56_button",arm_joint56_button_,2);
@@ -387,6 +395,15 @@ void TeleopCOB::init()
 	n_.param("led_r_button",led_buttons_[0],-1);
 	n_.param("led_g_button",led_buttons_[1],-1);
 	n_.param("led_b_button",led_buttons_[2],-1);
+
+	for(int i=0; i<4; i++) {
+		char buffer[128];
+		sprintf(buffer,"script_button%d",i);
+		n_.param(buffer,script_buttons_[i],-1);
+		sprintf(buffer,"script%d",i);
+		if(!n_.getParam(buffer,scripts_[i]))
+			ROS_WARN((std::string(buffer)+" is not set, but button is used").c_str());
+	}
 
 	n_.param("led_step",led_step_[0],0.1);
 	led_step_[1]=led_step_[2]=led_step_[0];
@@ -483,6 +500,48 @@ void TeleopCOB::joint_states_cb(const sensor_msgs::JointState::ConstPtr &joint_s
 	}
 }
 
+#define READ 0
+#define WRITE 1
+
+pid_t
+popen2(const char *command, int *infp, int *outfp)
+{
+    int p_stdin[2], p_stdout[2];
+    pid_t pid;
+
+    if (pipe(p_stdin) != 0 || pipe(p_stdout) != 0)
+        return -1;
+
+    pid = fork();
+
+    if (pid < 0)
+        return pid;
+    else if (pid == 0)
+    {
+        close(p_stdin[WRITE]);
+        dup2(p_stdin[READ], READ);
+        close(p_stdout[READ]);
+        dup2(p_stdout[WRITE], WRITE);
+
+        execl("/bin/sh", "sh", "-c", command, NULL);
+        perror("execl");
+        exit(1);
+    }
+
+    if (infp == NULL)
+        close(p_stdin[WRITE]);
+    else
+        *infp = p_stdin[WRITE];
+
+    if (outfp == NULL)
+        close(p_stdout[READ]);
+    else
+        *outfp = p_stdout[READ];
+
+    return pid;
+}
+
+
 /*!
  * \brief Executes the callback from the joystick topic.
  *
@@ -492,6 +551,26 @@ void TeleopCOB::joint_states_cb(const sensor_msgs::JointState::ConstPtr &joint_s
  */
 void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 {
+
+	//special button section (not critical!!!!)
+	if( special_button_>=0 && special_button_<(int)joy_msg->buttons.size() && joy_msg->buttons[special_button_]==1 ) {
+
+		// leds button
+		for(size_t i=0; i<3; i++) {
+			if(led_buttons_[i]>=0 && led_buttons_[i]<(int)joy_msg->buttons.size() && joy_msg->buttons[led_buttons_[i]]==1)
+			{
+				if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]>0.0)
+					led_value_[i] += led_step_[i]*run_factor_;
+				else if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]<0.0)
+					led_value_[i] -= led_step_[i]*run_factor_;
+
+				if(led_value_[i]>1) led_value_[i]=1;
+				else if(led_value_[i]<0) led_value_[i]=0;
+			}
+		}
+
+	}
+
 	// deadman button to activate joystick
 	if(deadman_button_>=0 && deadman_button_<(int)joy_msg->buttons.size() && joy_msg->buttons[deadman_button_]==1)
 	{
@@ -509,6 +588,22 @@ void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 		return;
 	}
 
+	//script button section
+	if( script_button_>=0 && script_button_<(int)joy_msg->buttons.size() && joy_msg->buttons[script_button_]==1 ) {
+
+		// leds button
+		for(size_t i=0; i<3; i++) {
+			if(script_buttons_[i]>=0 && script_buttons_[i]<(int)joy_msg->buttons.size() && joy_msg->buttons[script_buttons_[i]]==1)
+			{
+				ROS_INFO("start script %s...", scripts_[i].c_str());
+				char buffer[128];
+				if(pid_!=-1) sprintf(buffer,"kill -9 %d",pid_);
+				pid_ = popen2(scripts_[i].c_str(), NULL, NULL);
+			}
+		}
+
+	}
+
 	// run button
 	if(run_button_>=0 && run_button_<(int)joy_msg->buttons.size() && joy_msg->buttons[run_button_]==1)
 	{
@@ -518,21 +613,6 @@ void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 	{
 		run_factor_ = 1.0;
 	}
-
-	// leds button
-	for(size_t i=0; i<3; i++) {
-		if(led_buttons_[i]>=0 && led_buttons_[i]<(int)joy_msg->buttons.size() && joy_msg->buttons[led_buttons_[i]]==1)
-		{
-			if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]>0.0)
-				led_value_[i] += led_step_[i]*run_factor_;
-			else if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]<0.0)
-				led_value_[i] -= led_step_[i]*run_factor_;
-
-			if(led_value_[i]>1) led_value_[i]=1;
-			else if(led_value_[i]<0) led_value_[i]=0;
-		}
-	}
-	ROS_DEBUG("led values %f %f %f", led_value_[0], led_value_[1], led_value_[2]);
 	
 	// base safety button
 	if(base_safety_button_>=0 && base_safety_button_<(int)joy_msg->buttons.size() && joy_msg->buttons[base_safety_button_]==1)
