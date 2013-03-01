@@ -506,47 +506,34 @@ void TeleopCOB::joint_states_cb(const sensor_msgs::JointState::ConstPtr &joint_s
 	}
 }
 
-#define READ 0
-#define WRITE 1
-
-pid_t
-popen2(const char *command, int *infp, int *outfp)
-{
-    int p_stdin[2], p_stdout[2];
-    pid_t pid;
-
-    if (pipe(p_stdin) != 0 || pipe(p_stdout) != 0)
-        return -1;
-
-    pid = fork();
-
-    if (pid < 0)
-        return pid;
-    else if (pid == 0)
+int run_program(const std::string &cmd) {
+    std::string c = cmd;
+    size_t pos = 0;
+    while((pos = c.find("\"", pos)) != std::string::npos)
     {
-        close(p_stdin[WRITE]);
-        dup2(p_stdin[READ], READ);
-        close(p_stdout[READ]);
-        dup2(p_stdout[WRITE], WRITE);
-
-        execl("/bin/sh", "sh", "-c", command, NULL);
-        perror("execl");
-        exit(1);
+       c.replace(pos, std::string("\"").length(), "\\\"");
+       pos += std::string("\\\"").length();
     }
 
-    if (infp == NULL)
-        close(p_stdin[WRITE]);
-    else
-        *infp = p_stdin[WRITE];
+    FILE *fp = popen( ("ps -C \""+c+"\" --format  '%P %p'").c_str() , "r");
+    if (fp == NULL)
+    {
+        printf("ERROR!\n");
+	return -1;
+    }
 
-    if (outfp == NULL)
-        close(p_stdout[READ]);
-    else
-        *outfp = p_stdout[READ];
+    int pid = -1;
+    char parentID[256];
+    char processID[256];
+    while (fscanf(fp, "%s %s", parentID, processID) != EOF)
+    {
+	 pid = atoi(processID);
+	 break;
+    }
 
+    pclose(fp);
     return pid;
 }
-
 
 /*!
  * \brief Executes the callback from the joystick topic.
@@ -611,9 +598,9 @@ void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 				if(pid_!=-1) {
 					char buffer[128];
 					sprintf(buffer,"kill -9 %d",pid_);
-					popen2(buffer, NULL, NULL);
+					system(buffer);
 				}
-				pid_ = popen2(scripts_[i].c_str(), NULL, NULL);
+				pid_ = run_program(scripts_[i]);
 			}
 		}
 
