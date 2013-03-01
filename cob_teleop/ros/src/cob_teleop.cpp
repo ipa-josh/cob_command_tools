@@ -119,6 +119,7 @@ public:
 	int arm_joint56_button_;
 	int arm_joint7_button_;
 	int led_buttons_[3];
+	int led_buttons_pulse_;
 	int script_buttons_[4];
 	std::string scripts_[4];
 	pid_t pid_;
@@ -129,13 +130,13 @@ public:
 	int deadman_button_, run_button_, base_safety_button_, stop_base_button_, recover_base_button_;
 	bool joy_active_, stopped_, base_safety_;
 	double run_factor_, run_factor_param_;
-	double led_value_[3], led_step_[3];
+	double led_value_[6], led_step_[6];
 
 
 	ros::NodeHandle n_;
 	ros::Subscriber joy_sub_;  //subscribe topic joy
 	ros::Subscriber joint_states_sub_;  //subscribe topic joint_states
-	ros::Publisher led_pub_;
+	ros::Publisher led_pub_, led_pulse_pub_;
 
 	bool got_init_values_;
 	double time_for_init_;
@@ -395,20 +396,24 @@ void TeleopCOB::init()
 	n_.param("led_r_button",led_buttons_[0],-1);
 	n_.param("led_g_button",led_buttons_[1],-1);
 	n_.param("led_b_button",led_buttons_[2],-1);
+	n_.param("led_pulse_button",led_buttons_pulse_,-1);
 
 	for(int i=0; i<4; i++) {
 		char buffer[128];
 		sprintf(buffer,"script_button%d",i);
 		n_.param(buffer,script_buttons_[i],-1);
 		sprintf(buffer,"script%d",i);
-		if(!n_.getParam(buffer,scripts_[i]))
+		if(!n_.getParam(buffer,scripts_[i]) && script_buttons_[i]!=-1)
 			ROS_WARN((std::string(buffer)+" is not set, but button is used").c_str());
 	}
 
 	n_.param("led_step",led_step_[0],0.1);
+	n_.param("led_step_pulse",led_step_[5],0.1);
 	led_step_[1]=led_step_[2]=led_step_[0];
+	led_step_[3]=led_step_[4]=led_step_[5];
 
 	led_value_[0]=led_value_[1]=led_value_[2]=0;
+	led_value_[3]=led_value_[4]=led_value_[5]=0;
 
 	// assign axis
 	n_.param("axis_vx",axis_vx_,1);
@@ -440,6 +445,7 @@ void TeleopCOB::init()
 	joy_sub_ = n_.subscribe("/joy",1,&TeleopCOB::joy_cb,this);
 	joint_states_sub_ = n_.subscribe("/joint_states",1,&TeleopCOB::joint_states_cb,this);
 	led_pub_ = n_.advertise<std_msgs::ColorRGBA>(("/light_controller/command"),1);
+	led_pulse_pub_ = n_.advertise<std_msgs::ColorRGBA>(("/light_controller/pulse"),1);
 }
 
 /*!
@@ -559,16 +565,22 @@ void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 		for(size_t i=0; i<3; i++) {
 			if(led_buttons_[i]>=0 && led_buttons_[i]<(int)joy_msg->buttons.size() && joy_msg->buttons[led_buttons_[i]]==1)
 			{
+				int off=0;
+				if(led_buttons_pulse_>=0 && led_buttons_pulse_<(int)joy_msg->buttons.size() && joy_msg->buttons[led_buttons_pulse_]==1)
+					off=3;
+
 				if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]>0.0)
-					led_value_[i] += led_step_[i]*run_factor_;
+					led_value_[i+off] += led_step_[i+off]*run_factor_;
 				else if(up_down_>=0 && up_down_<(int)joy_msg->axes.size() && joy_msg->axes[up_down_]<0.0)
-					led_value_[i] -= led_step_[i]*run_factor_;
+					led_value_[i+off] -= led_step_[i+off]*run_factor_;
 
 				if(led_value_[i]>1) led_value_[i]=1;
-				else if(led_value_[i]<0) led_value_[i]=0;
+				else if(led_value_[i+off]<0) led_value_[i]=0;
 			}
 		}
 
+
+		update_leds();
 	}
 
 	// deadman button to activate joystick
@@ -596,8 +608,11 @@ void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 			if(script_buttons_[i]>=0 && script_buttons_[i]<(int)joy_msg->buttons.size() && joy_msg->buttons[script_buttons_[i]]==1)
 			{
 				ROS_INFO("start script %s...", scripts_[i].c_str());
-				char buffer[128];
-				if(pid_!=-1) sprintf(buffer,"kill -9 %d",pid_);
+				if(pid_!=-1) {
+					char buffer[128];
+					sprintf(buffer,"kill -9 %d",pid_);
+					popen2(buffer, NULL, NULL);
+				}
 				pid_ = popen2(scripts_[i].c_str(), NULL, NULL);
 			}
 		}
@@ -1022,6 +1037,12 @@ void TeleopCOB::update_leds()
 	color.b = led_value_[2];
 
 	led_pub_.publish(color);
+
+	color.r = led_value_[3];
+	color.g = led_value_[4];
+	color.b = led_value_[5];
+
+	led_pulse_pub_.publish(color);
 }
 
 /*!
