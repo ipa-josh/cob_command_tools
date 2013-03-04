@@ -878,6 +878,62 @@ class simple_script_server:
 		ah.error_code = 0
 		return ah
 
+	def set_pulse(self,parameter_name,blocking=False):
+		ah = action_handle("set", "pulse", parameter_name, blocking, self.parse)
+		if(self.parse):
+			return ah
+		else:
+			ah.set_active(mode="topic")
+
+		rospy.loginfo("Set light to <<%s>>",parameter_name)
+		
+		# get joint values from parameter server
+		if type(parameter_name) is str:
+			if not rospy.has_param(self.ns_global_prefix + "/light/" + parameter_name):
+				rospy.logerr("parameter %s does not exist on ROS Parameter Server, aborting...",self.ns_global_prefix + "/light/" + parameter_name)
+				return 2
+			param = rospy.get_param(self.ns_global_prefix + "/light/" + parameter_name)
+		else:
+			param = parameter_name
+			
+		# check color parameters
+		if not type(param) is list: # check outer list
+			rospy.logerr("no valid parameter for light: not a list, aborting...")
+			print "parameter is:",param
+			ah.error_code = 3
+			return ah
+		else:
+			if not len(param) == 3: # check dimension
+				rospy.logerr("no valid parameter for light: dimension should be 3 (r,g,b) and is %d, aborting...",len(param))
+				print "parameter is:",param
+				ah.error_code = 3
+				return ah
+			else:
+				for i in param:
+					#print i,"type1 = ", type(i)
+					if not ((type(i) is float) or (type(i) is int)): # check type
+						#print type(i)
+						rospy.logerr("no valid parameter for light: not a list of float or int, aborting...")
+						print "parameter is:",param
+						ah.error_code = 3
+						return ah
+					else:
+						rospy.logdebug("accepted parameter %f for light",i)
+		
+		# convert to ColorRGBA message
+		color = ColorRGBA()
+		color.r = param[0]
+		color.g = param[1]
+		color.b = param[2]
+		color.a = 1 # Transparency
+
+		# publish color		
+		self.pub_light.publish(color)
+		
+		ah.set_succeeded()
+		ah.error_code = 0
+		return ah
+
 #-------------------- Sound section --------------------#
 	## Say some text.
 	#
