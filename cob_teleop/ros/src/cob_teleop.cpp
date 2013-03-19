@@ -507,15 +507,15 @@ void TeleopCOB::joint_states_cb(const sensor_msgs::JointState::ConstPtr &joint_s
 }
 
 int run_program(const std::string &cmd) {
-    std::string c = cmd;
-    size_t pos = 0;
-    while((pos = c.find("\"", pos)) != std::string::npos)
+    FILE *fp = popen( (cmd+" &").c_str() , "r");
+    if (fp == NULL)
     {
-       c.replace(pos, std::string("\"").length(), "\\\"");
-       pos += std::string("\\\"").length();
+        printf("ERROR!\n");
+	return -1;
     }
+    pclose(fp);
 
-    FILE *fp = popen( ("ps -C \""+c+"\" --format  '%P %p'").c_str() , "r");
+    fp = popen( "echo $!" , "r");
     if (fp == NULL)
     {
         printf("ERROR!\n");
@@ -523,11 +523,10 @@ int run_program(const std::string &cmd) {
     }
 
     int pid = -1;
-    char parentID[256];
     char processID[256];
-    while (fscanf(fp, "%s %s", parentID, processID) != EOF)
+    while (fscanf(fp, "%d", &pid) != EOF)
     {
-	 pid = atoi(processID);
+std::cout<<pid<<"\n";
 	 break;
     }
 
@@ -591,7 +590,7 @@ void TeleopCOB::joy_cb(const sensor_msgs::Joy::ConstPtr &joy_msg)
 	if( script_button_>=0 && script_button_<(int)joy_msg->buttons.size() && joy_msg->buttons[script_button_]==1 ) {
 
 		// leds button
-		for(size_t i=0; i<3; i++) {
+		for(size_t i=0; i<4; i++) {
 			if(script_buttons_[i]>=0 && script_buttons_[i]<(int)joy_msg->buttons.size() && joy_msg->buttons[script_buttons_[i]]==1)
 			{
 				ROS_INFO("start script %s...", scripts_[i].c_str());
