@@ -848,7 +848,7 @@ class simple_script_server:
 			ah.error_code = 3
 			return ah
 		else:
-			if not len(param) == 3: # check dimension
+			if not (len(param) == 3 or len(param) == 6): # check dimension
 				rospy.logerr("no valid parameter for light: dimension should be 3 (r,g,b) and is %d, aborting...",len(param))
 				print "parameter is:",param
 				ah.error_code = 3
@@ -877,7 +877,9 @@ class simple_script_server:
 		
 		ah.set_succeeded()
 		ah.error_code = 0
-		return ah
+		pulse = [0,0,0]
+		if len(param) == 6: pulse=param[3:]
+		return self.set_pulse(pulse, blocking)
 
 	def set_pulse(self,parameter_name,blocking=False):
 		ah = action_handle("pulse", "light", parameter_name, blocking, self.parse)
