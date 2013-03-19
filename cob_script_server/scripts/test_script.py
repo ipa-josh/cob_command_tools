@@ -10,4 +10,4 @@ sss = simple_script_server()
 if __name__ == "__main__":
 	rospy.init_node("asd")
 	
-	sss.move("torso","home")
+	sss.move("base","charge_pose")

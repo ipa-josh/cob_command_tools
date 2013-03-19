@@ -76,11 +76,11 @@ from trajectory_msgs.msg import *
 from geometry_msgs.msg import *
 #from pr2_controllers_msgs.msg import *	#replaced by control_msgs.msg (FollowJointTrajectoryAction)
 from move_base_msgs.msg import *
-from arm_navigation_msgs.msg import *
-from arm_navigation_msgs.srv import *
+#from arm_navigation_msgs.msg import *
+#from arm_navigation_msgs.srv import *
 from tf.transformations import *
 from std_msgs.msg import String,ColorRGBA
-from kinematics_msgs.srv import *
+#from kinematics_msgs.srv import *
 from control_msgs.msg import *
 
 # care-o-bot includes
@@ -89,14 +89,14 @@ from cob_script_server.msg import *
 from cob_srvs.srv import *
 
 # graph includes
-import pygraphviz as pgv
+#import pygraphviz as pgv
 
 graph=""
 graph_wait_list=[]
 function_counter = 0
 ah_counter = 0
-graph = pgv.AGraph()
-graph.node_attr['shape']='box'
+#graph = pgv.AGraph()
+#graph.node_attr['shape']='box'
 last_node = "Start"
 
 ## Script class from which all script inherit.
@@ -171,6 +171,7 @@ class simple_script_server:
 		
 		# init publishers
 		self.pub_light = rospy.Publisher('/light_controller/command', ColorRGBA)
+		self.pub_pulse = rospy.Publisher('/light_controller/pulse', ColorRGBA)
 		
 		rospy.sleep(1) # we have to wait here until publishers are ready, don't ask why
 
@@ -879,20 +880,20 @@ class simple_script_server:
 		return ah
 
 	def set_pulse(self,parameter_name,blocking=False):
-		ah = action_handle("set", "pulse", parameter_name, blocking, self.parse)
+		ah = action_handle("pulse", "light", parameter_name, blocking, self.parse)
 		if(self.parse):
 			return ah
 		else:
 			ah.set_active(mode="topic")
 
-		rospy.loginfo("Set light to <<%s>>",parameter_name)
+		rospy.loginfo("Set pulse to <<%s>>",parameter_name)
 		
 		# get joint values from parameter server
 		if type(parameter_name) is str:
-			if not rospy.has_param(self.ns_global_prefix + "/light/" + parameter_name):
-				rospy.logerr("parameter %s does not exist on ROS Parameter Server, aborting...",self.ns_global_prefix + "/light/" + parameter_name)
+			if not rospy.has_param(self.ns_global_prefix + "/pulse/" + parameter_name):
+				rospy.logerr("parameter %s does not exist on ROS Parameter Server, aborting...",self.ns_global_prefix + "/pulse/" + parameter_name)
 				return 2
-			param = rospy.get_param(self.ns_global_prefix + "/light/" + parameter_name)
+			param = rospy.get_param(self.ns_global_prefix + "/pulse/" + parameter_name)
 		else:
 			param = parameter_name
 			
@@ -928,7 +929,7 @@ class simple_script_server:
 		color.a = 1 # Transparency
 
 		# publish color		
-		self.pub_light.publish(color)
+		self.pub_pulse.publish(color)
 		
 		ah.set_succeeded()
 		ah.error_code = 0

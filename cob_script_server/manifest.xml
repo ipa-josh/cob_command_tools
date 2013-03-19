@@ -16,17 +16,17 @@
   <depend package="std_msgs"/>
   <depend package="cob_srvs"/>
   <depend package="trajectory_msgs"/>
-  <depend package="kinematics_msgs"/>
+  <!--depend package="kinematics_msgs"/-->
   <depend package="geometry_msgs"/>
    <depend package="control_msgs"/>
   <depend package="pr2_controllers_msgs"/>
   <depend package="move_base_msgs"/>
-  <depend package="arm_navigation_msgs"/>
+  <!--depend package="arm_navigation_msgs"/-->
   <depend package="cob_sound"/>
 
-  <depend package="rostest"/>
+  <!--depend package="rostest"/-->
   
-  <rosdep name="python-pygraphviz"/>
+  <!--rosdep name="python-pygraphviz"/-->
  
   <export>
     <cpp cflags="-I${prefix}/msg/cpp"/>
