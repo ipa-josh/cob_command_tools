@@ -781,7 +781,7 @@ class simple_script_server:
 		rot_vel = parameter_name[2] / duration_sec
 
 		# step 3: send constant velocity command to base_controller for the calculated duration of motion
-		pub = rospy.Publisher('/base_controller/command_safe', Twist)  # todo: use Matthias G.'s safe_command
+		pub = rospy.Publisher('/cmd_vel', Twist)  # todo: use Matthias G.'s safe_command
 		twist = Twist()
 		twist.linear.x = x_vel
 		twist.linear.y = y_vel
